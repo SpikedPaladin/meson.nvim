@@ -8,7 +8,7 @@ M.defaults = {
 }
 
 ---@class Options
-M.options = {}
+M.options = vim.deepcopy(M.defaults)
 
 ---Extend the defaults options table with the user options
 ---@param opts UserOptions: plugin options
