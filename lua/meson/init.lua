@@ -56,11 +56,11 @@ M.install = {
 
 ---@type MesonCommand
 M.run = {
-    run = function()
+    run = function(args)
         local nio = require("nio")
 
-        nio.run(function ()
-            require("meson.core").run()
+        nio.run(function()
+            require("meson.core").run(args[1])
         end)
     end,
     complete = function(arg_lead)

@@ -63,15 +63,25 @@ function M.install()
     require("meson.core.terminal").install(M.project_name)
 end
 
-function M.run()
+function M.run(target_name)
     local targets = try_get_targets()
+    local selected_target
     if not targets then return end
 
     for _, item in ipairs(targets) do
-        if item.type == "executable" then
-            require("meson.core.terminal").run(M.project_name, item.filename[1])
-            return
+        if target_name then
+            if target_name == item.name then
+                selected_target = item
+                break
+            end
+        elseif item.type == "executable" then
+            selected_target = item
+            break;
         end
+    end
+
+    if selected_target then
+        require("meson.core.terminal").run(M.project_name, selected_target.filename[1])
     end
 
     vim.notify("Executable target not found", vim.log.levels.WARN)
