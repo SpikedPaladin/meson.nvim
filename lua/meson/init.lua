@@ -9,12 +9,16 @@ end
 
 ---@type MesonCommand
 M.output = {
-    run = function()
-        require("meson.core.terminal.build").toggle()
+    run = function(args)
+        if #args > 0 then
+            require("meson.core.terminal").switch_output_buffer(args[1], true)
+        else
+            require("meson.core.terminal").output:toggle()
+        end
     end,
     complete = function(arg_lead)
         return vim
-            .iter({ "build", "application" })
+            .iter({ "build", "b", "app", "a" })
             :filter(function(arg) return arg:find(arg_lead) ~= nil end)
             :totable()
     end

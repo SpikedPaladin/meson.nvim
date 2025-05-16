@@ -31,4 +31,5 @@
 -- lua/meson/core/util.lua ------------------------------------------------------
 
 ---@class ExecuteOpts
+---@field buffer string? output buffer name
 ---@field env table<string, string>?: Custom environment variables
