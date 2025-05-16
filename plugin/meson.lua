@@ -1,4 +1,5 @@
 local commands = {
+    rebuild = require("meson").rebuild,
     install = require("meson").install,
     output = require("meson").output,
     reload = require("meson").reload,

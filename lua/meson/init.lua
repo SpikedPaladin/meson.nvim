@@ -4,7 +4,7 @@ local M = {}
 ---Setup the meson plugin
 ---@param opts UserOptions: plugin options
 function M.setup(opts)
-  require("meson.config").setup(opts)
+    require("meson.config").setup(opts)
 end
 
 ---@type MesonCommand
@@ -17,6 +17,17 @@ M.output = {
             .iter({ "build", "application" })
             :filter(function(arg) return arg:find(arg_lead) ~= nil end)
             :totable()
+    end
+}
+
+---@type MesonCommand
+M.rebuild = {
+    run = function()
+        local nio = require("nio")
+
+        nio.run(function()
+            require("meson.core").rebuild()
+        end)
     end
 }
 

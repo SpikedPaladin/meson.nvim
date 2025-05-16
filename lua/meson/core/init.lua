@@ -56,6 +56,14 @@ function M.targets()
     end
 end
 
+function M.rebuild()
+    local name = try_get_name()
+    if not name then return end
+
+    M.project_targets = nil
+    require("meson.core.terminal").rebuild(name)
+end
+
 function M.install()
     local targets = try_get_targets()
     if not targets then return end
@@ -82,6 +90,7 @@ function M.run(target_name)
 
     if selected_target then
         require("meson.core.terminal").run(M.project_name, selected_target.filename[1])
+        return
     end
 
     vim.notify("Executable target not found", vim.log.levels.WARN)

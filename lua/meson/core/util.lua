@@ -89,4 +89,55 @@ function M.get_build_dir(name)
     return M.get_project_dir(name) .. get_build_path()
 end
 
+local function delete_with_output(path, callback)
+    local stat = vim.uv.fs_stat(path)
+
+    if not stat then
+        return true
+    end
+
+    if stat.type == "directory" then
+        local scanner, err = vim.uv.fs_scandir(path)
+        if not scanner then
+            callback("Failed to get directory contents " .. path .. ":" .. err)
+            return false
+        end
+
+        local has_errors = false
+        while true do
+            local name, _ = vim.uv.fs_scandir_next(scanner)
+            if not name then break end
+
+            if name ~= "." and name ~= ".." then
+                local full_path = path .. "/" .. name
+                if not delete_with_output(full_path, callback) then
+                    has_errors = true
+                end
+            end
+        end
+
+        local success, err = vim.uv.fs_rmdir(path)
+        if success then
+            callback("Removed " .. path)
+        else
+            callback("Failed to remove " .. path .. ":" .. err)
+            has_errors = true
+        end
+
+        return not has_errors
+    else
+        local success, err = vim.uv.fs_unlink(path)
+        if success then
+            callback("Removed " .. path)
+        else
+            callback("Failed to remove " .. path .. ":" .. err)
+        end
+    end
+end
+
+function M.clear_build_dir(name, callback)
+    local path = M.get_build_dir(name)
+    delete_with_output(path, callback);
+end
+
 return M
