@@ -14,7 +14,6 @@ function M.switch_output_buffer(output_name, show)
         M.output:change_buffer("app")
     end
 
-    M.output:update_buf()
     if show then
         M.output:show()
     end
@@ -22,8 +21,9 @@ end
 
 ---Run meson setup
 ---@param name string project name
+---@return integer exit_code
 local function setup(name)
-    M.output:execute(require("meson.core.util").get_setup_command(name), { buffer = "build" })
+    return M.output:execute(require("meson.core.util").get_setup_command(name), { buffer = "build" })
 end
 
 local function build(name)
@@ -33,7 +33,7 @@ end
 ---@async
 function M.setup(name)
     M.output:change_buffer("build"):clear()
-    setup(name)
+    return setup(name)
 end
 
 ---@async

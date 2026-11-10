@@ -3,6 +3,14 @@
 ---@field project_targets? table project targets
 local M = {}
 
+local function get_project()
+    if not M.project then
+        M.project = require("meson.project").new()
+    end
+
+    return M.project
+end
+
 ---Tries to reload meson configuration
 ---@param notify? boolean display notification if failed
 function M.reload(notify)

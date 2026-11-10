@@ -1,9 +1,13 @@
+---@class TerminalBuffer
+---@field buf integer Terminal buffer handle
+---@field channel integer Terminal input channel
+
 ---@class TerminalOutput
 ---@field win snacks.win Build terminal window
 ---@field job_id integer? Running build job id
 ---@field event nio.control.Event? Running build job event
----@field buffers table<string, string[]> Available buffer contents
----@field buffer string Selected buffer content
+---@field buffers table<string, TerminalBuffer> Available terminal buffers
+---@field buffer string Selected buffer name
 local M = setmetatable({}, {
     __call = function(t, ...)
         return t.new(...)
@@ -11,24 +15,32 @@ local M = setmetatable({}, {
 })
 M.__index = M
 
+---@return TerminalBuffer
+local function create_terminal()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local channel = vim.api.nvim_open_term(buf, {})
+    vim.api.nvim_set_option_value("filetype", "terminal", { buf = buf })
+
+    return { buf = buf, channel = channel }
+end
+
 function M.new()
     local self = setmetatable({}, M)
     self.buffers = {
-        build = {},
-        app = {}
+        build = create_terminal(),
+        app = create_terminal()
     }
     self.buffer = "build"
 
     self.win = Snacks.win.new {
-        buf = vim.api.nvim_create_buf(false, true),
+        buf = self.buffers.build.buf,
         style = "terminal",
-        position = "bottom",
-        keys = { q = "hide" }
+        position = "bottom"
     }
 
-    vim.api.nvim_set_option_value("filetype", "terminal", { buf = self.win.buf })
-    vim.api.nvim_set_option_value("buftype", "nofile", { buf = self.win.buf })
-    vim.api.nvim_set_option_value("modifiable", false, { buf = self.win.buf })
+    for _, terminal in pairs(self.buffers) do
+        vim.keymap.set("n", "q", function() self.win:hide() end, { buffer = terminal.buf })
+    end
 
     self.win:hide()
 
@@ -44,9 +56,14 @@ function M:toggle()
 end
 
 function M:change_buffer(buffer_name)
-    if self.buffers[buffer_name] then
+    local terminal = self.buffers[buffer_name]
+    if terminal then
         self.buffer = buffer_name
-        self:update_buf()
+        if self.win:win_valid() then
+            self.win:set_buf(terminal.buf)
+        else
+            self.win.buf = terminal.buf
+        end
     end
 
     return self
@@ -56,28 +73,22 @@ function M:get_buffer(buffer_name)
     return self.buffers[buffer_name or self.buffer]
 end
 
-function M:update_buf()
-    if not self.win:buf_valid() then
-        vim.notify("Buffer is not valid", vim.log.levels.ERROR)
-        return
-    end
+---@param content string
+---@param buffer_name string?
+function M:write(content, buffer_name)
+    local terminal = self:get_buffer(buffer_name)
+    if not terminal or not vim.api.nvim_buf_is_valid(terminal.buf) then return end
 
-    vim.api.nvim_set_option_value("modifiable", true, { buf = self.win.buf })
-    vim.api.nvim_buf_set_lines(self.win.buf, 0, -1, false, self:get_buffer())
+    vim.api.nvim_chan_send(terminal.channel, content)
 
-    local last_line = math.max(1, #self:get_buffer())
-    if self.win:win_valid() then
-        vim.api.nvim_win_set_cursor(self.win.win, {last_line, 0})
+    if self.win:win_valid() and self.win.buf == terminal.buf then
+        local last_line = vim.api.nvim_buf_line_count(terminal.buf)
+        vim.api.nvim_win_set_cursor(self.win.win, { last_line, 0 })
     end
-    vim.api.nvim_set_option_value("modifiable", false, { buf = self.win.buf })
 end
 
 function M:insert(content, buffer_name)
-    table.insert(self:get_buffer(buffer_name), content)
-
-    if not buffer_name or buffer_name == self.buffer then
-        self:update_buf()
-    end
+    self:write(content .. "\r\n", buffer_name)
 end
 
 function M:stop_job()
@@ -89,15 +100,17 @@ function M:stop_job()
 end
 
 function M:clear(buffer_name)
-    local buffer = self:get_buffer(buffer_name)
+    local name = buffer_name or self.buffer
+    local previous = self.buffers[name]
+    if not previous then return self end
 
-    while #buffer > 0 do
-        table.remove(buffer)
+    self.buffers[name] = create_terminal()
+    vim.keymap.set("n", "q", function() self.win:hide() end, { buffer = self.buffers[name].buf })
+    if name == self.buffer then
+        self:change_buffer(name)
     end
-    if (not buffer_name or self.buffer == buffer_name) and self.win:buf_valid() then
-        vim.api.nvim_set_option_value("modifiable", true, { buf = self.win.buf })
-        vim.api.nvim_buf_set_lines(self.win.buf, 0, -1, false, {})
-        vim.api.nvim_set_option_value("modifiable", false, { buf = self.win.buf })
+    if vim.api.nvim_buf_is_valid(previous.buf) then
+        vim.api.nvim_buf_delete(previous.buf, { force = true })
     end
 
     return self
@@ -119,20 +132,13 @@ function M:execute(cmd, opts)
     local function on_output(_, data, _)
         if not data then return end
 
-        for _, line in ipairs(data) do
-            if line ~= "" then
-                table.insert(self:get_buffer(opts.buffer), line)
-            end
-        end
-
-        if not opts.buffer or opts.buffer == self.buffer then
-            self:update_buf()
-        end
+        self:write(table.concat(data, "\r\n"), opts.buffer)
     end
 
     self.event = require("nio").control.event()
 
     local job_env = vim.fn.environ()
+    job_env.CLICOLOR_FORCE = job_env.CLICOLOR_FORCE or "1"
     if opts.env then
         for k, v in pairs(opts.env) do
             job_env[k] = v
@@ -142,6 +148,7 @@ function M:execute(cmd, opts)
     local code = 0
 
     self.job_id = vim.fn.jobstart(cmd, {
+        pty = true,
         stdout_buffered = false,
         on_stdout = on_output,
         on_stderr = on_output,
