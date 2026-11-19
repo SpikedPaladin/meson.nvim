@@ -135,7 +135,8 @@ function M:execute(cmd, opts)
         self:write(table.concat(data, "\r\n"), opts.buffer)
     end
 
-    self.event = require("nio").control.event()
+    local event = require("nio").control.event()
+    self.event = event
 
     local job_env = vim.fn.environ()
     job_env.CLICOLOR_FORCE = job_env.CLICOLOR_FORCE or "1"
@@ -157,7 +158,7 @@ function M:execute(cmd, opts)
             code = exit_code
             self.job_id = nil
             self:insert("[Process exited with code ${code}]" % { code = exit_code }, opts.buffer)
-            self.event.set()
+            event.set()
         end,
     })
 
@@ -166,7 +167,7 @@ function M:execute(cmd, opts)
         self.job_id = nil
     end
 
-    self.event.wait()
+    event.wait()
     self.event = nil
     return code
 end
